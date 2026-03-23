@@ -8,24 +8,23 @@ from PIL import Image, ImageOps, ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 import numpy as np
 from pathlib import Path
-# streamlit-drawable-canvas が使う内部API互換パッチ
-# 旧: image_to_url(image, width:int, clamp, channels, fmt, key)
-# 新: image_to_url(image, layout_config:LayoutConfig, clamp, channels, fmt, key)
-# このあたり画像読み込みー出力を堅牢化するために、streamlitのバージョン差異を吸収する互換関数を定義している。
-#import streamlit.elements.image as _st_img_mod
-#if not hasattr(_st_img_mod, "image_to_url"):
-#    try:
-#        from streamlit.elements.lib.image_utils import image_to_url as _new_image_to_url
-#        from streamlit.elements.lib.layout_utils import LayoutConfig as _LayoutConfig
-#
-#        def _compat_image_to_url(image, width_or_config, *args, **kwargs):
-#            if isinstance(width_or_config, int):
-#                width_or_config = _LayoutConfig(width=width_or_config)
-#            return _new_image_to_url(image, width_or_config, *args, **kwargs)
-#
-#        _st_img_mod.image_to_url = _compat_image_to_url
-#    except ImportError:
-#        pass
+
+import streamlit.elements.image as _st_img_mod
+if not hasattr(_st_img_mod, "image_to_url"):
+    try:
+        # 新しいバージョンの内部関数を直接持ってくる
+        from streamlit.runtime.media_file_storage import MediaFileStorage
+        from streamlit.elements.image import image_to_url as _native_image_to_url
+        _st_img_mod.image_to_url = _native_image_to_url
+    except ImportError:
+        # 1.30.0前後で見られる構成
+        try:
+            from streamlit.elements.lib.image_utils import image_to_url as _lib_image_to_url
+            _st_img_mod.image_to_url = _lib_image_to_url
+        except ImportError:
+            pass
+
+
 
 from streamlit_drawable_canvas import st_canvas
 
@@ -274,7 +273,7 @@ if st.session_state.file_names:
                     height=display_h + 2 * CANVAS_PAD,
                     width=display_w + 2 * CANVAS_PAD,
                     drawing_mode="polygon",
-                    key=f"canvas_{filename}",
+                    key=f"canvas_idx_{st.session_state.file_index}", # ファイル名ではなく「番号」を使う
             )
 
         # --- Manual Exclusion Preview（下段全幅）---
