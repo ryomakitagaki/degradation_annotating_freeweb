@@ -31,6 +31,12 @@ from streamlit_drawable_canvas import st_canvas
 
 import logic
 
+password = st.sidebar.text_input("パスワードを入力してください", type="password")
+if password != "ryoma6239!":  # ← ここに好きなパスワードを設定
+    if not password: st.info("サイドバーにパスワードを入力して開始してください。")
+    else: st.error("パスワードが正しくありません。")
+    st.stop()
+
 # --- ヘルパー関数 (エラー回避のため外側に定義.) ---
 def get_exclusion_mask(image_data, target_w, target_h):
     """canvas の image_data から除外マスクを target サイズで作成する"""
