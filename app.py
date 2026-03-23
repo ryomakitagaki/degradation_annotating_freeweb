@@ -11,41 +11,27 @@ from pathlib import Path
 
 from streamlit_drawable_canvas import st_canvas
 
-# --- クラウド環境対応（2段階パッチ） ---
-# 問題: st_canvasのJSコードは `e.src = n + h` でorigin+URLを連結する。
-#       Cloudでは n="https://...streamlit.app" が設定されるため、
-#       data:// URLを h に渡すと壊れる。また /_stcore/media/ URLも
-#       Cloud環境ではiframeから読み込めないケースがある。
-# 対策1: JSファイルの `e.src=n+h` を `e.src=h&&h.startsWith("data:")?h:n+h` に書き換え
-# 対策2: image_to_url をbase64データURL返却に差し替え（対策1と組み合わせて使う）
-import glob as _glob
-
-def _patch_canvas_js():
-    import streamlit_drawable_canvas as _m
-    import os
-    pkg_dir = os.path.dirname(_m.__file__)
-    js_files = _glob.glob(os.path.join(pkg_dir, "frontend/build/static/js/main.*.chunk.js"))
-    for js_path in js_files:
-        with open(js_path, "r") as f:
-            content = f.read()
-        old = "e.src=n+h"
-        new = 'e.src=h&&h.startsWith("data:")?h:n+h'
-        if old in content and new not in content:
-            with open(js_path, "w") as f:
-                f.write(content.replace(old, new))
-
-_patch_canvas_js()
-
+# --- クラウド環境対応: st_canvasの背景画像をstatic file servingで提供 ---
+# st_canvasのJS: `e.src = n + h` (n=origin, h=backgroundImageURL)
+# Cloud環境ではJSファイルが読み取り専用でパッチ不可、data URLも壊れる。
+# そのため、画像をstatic/ディレクトリに保存してURLで提供する。
+import os as _os
+from hashlib import md5 as _md5
 import streamlit_drawable_canvas as _sdc_module
 
-def _image_to_base64_url(image, width, clamp, channels, output_format, image_id):
-    buf = io.BytesIO()
-    image.save(buf, format=output_format)
-    b64 = base64.b64encode(buf.getvalue()).decode()
-    mime = "image/png" if output_format.upper() == "PNG" else "image/jpeg"
-    return f"data:{mime};base64,{b64}"
+_STATIC_DIR = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "static")
+_os.makedirs(_STATIC_DIR, exist_ok=True)
 
-_sdc_module.st_image.image_to_url = _image_to_base64_url
+def _image_to_static_url(image, width, clamp, channels, output_format, image_id):
+    """画像をstatic/に保存し、/app/static/ファイル名 を返す"""
+    ext = "png" if output_format.upper() == "PNG" else "jpg"
+    fname = f"canvas_bg_{_md5(image.tobytes()).hexdigest()[:16]}.{ext}"
+    fpath = _os.path.join(_STATIC_DIR, fname)
+    if not _os.path.exists(fpath):
+        image.save(fpath, format=output_format)
+    return f"/app/static/{fname}"
+
+_sdc_module.st_image.image_to_url = _image_to_static_url
 
 import logic
 
