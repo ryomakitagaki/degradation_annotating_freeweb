@@ -1,0 +1,6 @@
+streamlit==1.55.0
+google-genai
+opencv-python-headless==4.11.0.86
+numpy==2.4.3
+Pillow==9.5.0
+streamlit-drawable-canvas==0.9.3
