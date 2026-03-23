@@ -9,38 +9,43 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 import numpy as np
 from pathlib import Path
 
-import streamlit.elements.image as _st_img_mod
-if not hasattr(_st_img_mod, "image_to_url"):
-    try:
-        # 新しいバージョンの内部関数を直接持ってくる
-        from streamlit.runtime.media_file_storage import MediaFileStorage
-        from streamlit.elements.image import image_to_url as _native_image_to_url
-        _st_img_mod.image_to_url = _native_image_to_url
-    except ImportError:
-        # 1.30.0前後で見られる構成
-        try:
-            from streamlit.elements.lib.image_utils import image_to_url as _lib_image_to_url
-            _st_img_mod.image_to_url = _lib_image_to_url
-        except ImportError:
-            pass
-
-
-
 from streamlit_drawable_canvas import st_canvas
 
-# --- クラウド環境での画像転送を強制正常化するパッチ ---
-import streamlit.elements.image as _st_img_mod
-try:
-    # 1.31.0以降の構成に対応
-    from streamlit.elements.image import image_to_url as _native_image_to_url
-    _st_img_mod.image_to_url = _native_image_to_url
-except ImportError:
-    try:
-        # 少し前のバージョンに対応
-        from streamlit.elements.lib.image_utils import image_to_url as _lib_image_to_url
-        _st_img_mod.image_to_url = _lib_image_to_url
-    except ImportError:
-        pass
+# --- クラウド環境対応（2段階パッチ） ---
+# 問題: st_canvasのJSコードは `e.src = n + h` でorigin+URLを連結する。
+#       Cloudでは n="https://...streamlit.app" が設定されるため、
+#       data:// URLを h に渡すと壊れる。また /_stcore/media/ URLも
+#       Cloud環境ではiframeから読み込めないケースがある。
+# 対策1: JSファイルの `e.src=n+h` を `e.src=h&&h.startsWith("data:")?h:n+h` に書き換え
+# 対策2: image_to_url をbase64データURL返却に差し替え（対策1と組み合わせて使う）
+import glob as _glob
+
+def _patch_canvas_js():
+    import streamlit_drawable_canvas as _m
+    import os
+    pkg_dir = os.path.dirname(_m.__file__)
+    js_files = _glob.glob(os.path.join(pkg_dir, "frontend/build/static/js/main.*.chunk.js"))
+    for js_path in js_files:
+        with open(js_path, "r") as f:
+            content = f.read()
+        old = "e.src=n+h"
+        new = 'e.src=h&&h.startsWith("data:")?h:n+h'
+        if old in content and new not in content:
+            with open(js_path, "w") as f:
+                f.write(content.replace(old, new))
+
+_patch_canvas_js()
+
+import streamlit_drawable_canvas as _sdc_module
+
+def _image_to_base64_url(image, width, clamp, channels, output_format, image_id):
+    buf = io.BytesIO()
+    image.save(buf, format=output_format)
+    b64 = base64.b64encode(buf.getvalue()).decode()
+    mime = "image/png" if output_format.upper() == "PNG" else "image/jpeg"
+    return f"data:{mime};base64,{b64}"
+
+_sdc_module.st_image.image_to_url = _image_to_base64_url
 
 import logic
 
@@ -275,19 +280,15 @@ if st.session_state.file_names:
             pad_orig = max(1, round(CANVAS_PAD * w / display_w))
             padded_traced = ImageOps.expand(traced_pil, border=pad_orig, fill=(160, 160, 160))
 
-            # デバッグ用：キャンバスに渡す画像そのものを表示してみる
-            # st.image(padded_traced, caption="Debug: This image should be on the canvas")
-
-            # 1. パッチを消した状態で、単純に PIL 画像を渡す
             canvas_result = st_canvas(
-                    fill_color="rgba(255, 255, 255, 0.3)", # 少し透明度を上げる
+                    fill_color="rgba(255, 255, 255, 0.3)",
                     stroke_width=2,
-                    background_image=padded_traced, 
+                    background_image=padded_traced,
                     update_streamlit=True,
                     height=display_h + 2 * CANVAS_PAD,
                     width=display_w + 2 * CANVAS_PAD,
                     drawing_mode="polygon",
-                    key=f"canvas_index_{st.session_state.file_index}", # ファイル名ではなく「番号」を使う
+                    key=f"canvas_index_{st.session_state.file_index}",
             )
 
         # --- Manual Exclusion Preview（下段全幅）---
