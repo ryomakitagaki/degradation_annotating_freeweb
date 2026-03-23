@@ -28,6 +28,20 @@ if not hasattr(_st_img_mod, "image_to_url"):
 
 from streamlit_drawable_canvas import st_canvas
 
+# --- クラウド環境での画像転送を強制正常化するパッチ ---
+import streamlit.elements.image as _st_img_mod
+try:
+    # 1.31.0以降の構成に対応
+    from streamlit.elements.image import image_to_url as _native_image_to_url
+    _st_img_mod.image_to_url = _native_image_to_url
+except ImportError:
+    try:
+        # 少し前のバージョンに対応
+        from streamlit.elements.lib.image_utils import image_to_url as _lib_image_to_url
+        _st_img_mod.image_to_url = _lib_image_to_url
+    except ImportError:
+        pass
+
 import logic
 
 st.set_page_config(page_title="Degradation Analysis & Annotation Tool", layout="wide")
@@ -273,7 +287,7 @@ if st.session_state.file_names:
                     height=display_h + 2 * CANVAS_PAD,
                     width=display_w + 2 * CANVAS_PAD,
                     drawing_mode="polygon",
-                    key=f"canvas_idx_{st.session_state.file_index}", # ファイル名ではなく「番号」を使う
+                    key=f"canvas_index_{st.session_state.file_index}", # ファイル名ではなく「番号」を使う
             )
 
         # --- Manual Exclusion Preview（下段全幅）---
