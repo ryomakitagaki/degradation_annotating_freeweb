@@ -31,6 +31,8 @@ from streamlit_drawable_canvas import st_canvas
 
 import logic
 
+st.set_page_config(page_title="Degradation Analysis & Annotation Tool", layout="wide")
+
 password = st.sidebar.text_input("パスワードを入力してください", type="password")
 if password != "ryoma6239!":  # ← ここに好きなパスワードを設定
     if not password: st.info("サイドバーにパスワードを入力して開始してください。")
@@ -51,7 +53,6 @@ def get_exclusion_mask(image_data, target_w, target_h):
     return mask
 
 # --- UI設定 ---
-st.set_page_config(page_title="Degradation Analysis & Annotation Tool", layout="wide")
 st.title("🏗️ Degradation Analysis & Annotation Tool")
 
 # --- セッション状態の初期化 ---
