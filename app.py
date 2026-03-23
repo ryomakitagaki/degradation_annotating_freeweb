@@ -265,15 +265,16 @@ if st.session_state.file_names:
             # デバッグ用：キャンバスに渡す画像そのものを表示してみる
             st.image(padded_traced, caption="Debug: This image should be on the canvas")
 
+            # 1. パッチを消した状態で、単純に PIL 画像を渡す
             canvas_result = st_canvas(
-                fill_color="rgba(255, 255, 255, 0.5)",
-                stroke_width=2,
-                background_image=padded_traced,
-                update_streamlit=True,
-                height=display_h + 2 * CANVAS_PAD,
-                width=display_w + 2 * CANVAS_PAD,
-                drawing_mode="polygon",
-                key=f"canvas_{filename}",
+                    fill_color="rgba(255, 255, 255, 0.3)", # 少し透明度を上げる
+                    stroke_width=2,
+                    background_image=padded_traced, 
+                    update_streamlit=True,
+                    height=display_h + 2 * CANVAS_PAD,
+                    width=display_w + 2 * CANVAS_PAD,
+                    drawing_mode="polygon",
+                    key=f"canvas_{filename}",
             )
 
         # --- Manual Exclusion Preview（下段全幅）---
