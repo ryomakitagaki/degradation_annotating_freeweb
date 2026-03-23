@@ -11,39 +11,29 @@ from pathlib import Path
 
 from streamlit_drawable_canvas import st_canvas
 
-# --- クラウド環境対応: st_canvasの背景画像をstatic file servingで提供 ---
-# st_canvasのJS: `e.src = n + h` (n=origin, h=backgroundImageURL)
-# Cloud環境ではJSファイルが読み取り専用でパッチ不可、data URLも壊れる。
-# そのため、画像をstatic/ディレクトリに保存してURLで提供する。
+# --- クラウド環境対応: リポジトリ内のパッチ済みcanvasフロントエンドを使用 ---
+# Streamlit CloudではvenvのJSファイルが読み取り専用でパッチ不可。
+# そのため、フロントエンドをリポジトリにコピーし、JSのバグを修正済みのものを使う。
+# 修正内容: `e.src=n+h` → `e.src=h&&h.startsWith("data:")?h:n+h`
+# これにより、image_to_urlがbase64 data URLを返しても正しく動作する。
 import os as _os
-from hashlib import md5 as _md5
+import streamlit.components.v1 as _cv1
 import streamlit_drawable_canvas as _sdc_module
 
-_STATIC_DIR = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "static")
-_os.makedirs(_STATIC_DIR, exist_ok=True)
+_CANVAS_FRONTEND = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "canvas_frontend/build")
+_sdc_module._component_func = _cv1.declare_component("st_canvas", path=_CANVAS_FRONTEND)
 
-_canvas_bg_debug = {}  # デバッグ情報を格納
+def _image_to_base64_url(image, width, clamp, channels, output_format, image_id):
+    """PIL画像をbase64データURLに変換（パッチ済みJSがdata URLを正しく処理する）"""
+    buf = io.BytesIO()
+    image.save(buf, format=output_format)
+    b64 = base64.b64encode(buf.getvalue()).decode()
+    mime = "image/png" if output_format.upper() == "PNG" else "image/jpeg"
+    return f"data:{mime};base64,{b64}"
 
-def _image_to_static_url(image, width, clamp, channels, output_format, image_id):
-    """画像をstatic/に保存し、/app/static/ファイル名 を返す"""
-    ext = "png" if output_format.upper() == "PNG" else "jpg"
-    fname = f"canvas_bg_{_md5(image.tobytes()).hexdigest()[:16]}.{ext}"
-    fpath = _os.path.join(_STATIC_DIR, fname)
-    error = ""
-    try:
-        if not _os.path.exists(fpath):
-            image.save(fpath, format=output_format)
-    except Exception as e:
-        error = str(e)
-    _canvas_bg_debug.update({
-        "url": f"/app/static/{fname}",
-        "file_exists": _os.path.exists(fpath),
-        "static_dir": _STATIC_DIR,
-        "error": error,
-    })
-    return f"/app/static/{fname}"
+_sdc_module.st_image.image_to_url = _image_to_base64_url
 
-_sdc_module.st_image.image_to_url = _image_to_static_url
+_canvas_bg_debug = {}
 
 import logic
 
@@ -54,11 +44,6 @@ if password != "ryoma6239!":  # ← ここに好きなパスワードを設定
     if not password: st.info("サイドバーにパスワードを入力して開始してください。")
     else: st.error("パスワードが正しくありません。")
     st.stop()
-
-# --- デバッグ情報（サイドバー） ---
-if _canvas_bg_debug:
-    with st.sidebar.expander("🔧 Canvas BG Debug", expanded=False):
-        st.write(_canvas_bg_debug)
 
 # --- ヘルパー関数 (エラー回避のため外側に定義.) ---
 def get_exclusion_mask(image_data, target_w, target_h):
