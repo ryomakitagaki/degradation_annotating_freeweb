@@ -22,13 +22,25 @@ import streamlit_drawable_canvas as _sdc_module
 _STATIC_DIR = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "static")
 _os.makedirs(_STATIC_DIR, exist_ok=True)
 
+_canvas_bg_debug = {}  # デバッグ情報を格納
+
 def _image_to_static_url(image, width, clamp, channels, output_format, image_id):
     """画像をstatic/に保存し、/app/static/ファイル名 を返す"""
     ext = "png" if output_format.upper() == "PNG" else "jpg"
     fname = f"canvas_bg_{_md5(image.tobytes()).hexdigest()[:16]}.{ext}"
     fpath = _os.path.join(_STATIC_DIR, fname)
-    if not _os.path.exists(fpath):
-        image.save(fpath, format=output_format)
+    error = ""
+    try:
+        if not _os.path.exists(fpath):
+            image.save(fpath, format=output_format)
+    except Exception as e:
+        error = str(e)
+    _canvas_bg_debug.update({
+        "url": f"/app/static/{fname}",
+        "file_exists": _os.path.exists(fpath),
+        "static_dir": _STATIC_DIR,
+        "error": error,
+    })
     return f"/app/static/{fname}"
 
 _sdc_module.st_image.image_to_url = _image_to_static_url
@@ -42,6 +54,11 @@ if password != "ryoma6239!":  # ← ここに好きなパスワードを設定
     if not password: st.info("サイドバーにパスワードを入力して開始してください。")
     else: st.error("パスワードが正しくありません。")
     st.stop()
+
+# --- デバッグ情報（サイドバー） ---
+if _canvas_bg_debug:
+    with st.sidebar.expander("🔧 Canvas BG Debug", expanded=False):
+        st.write(_canvas_bg_debug)
 
 # --- ヘルパー関数 (エラー回避のため外側に定義.) ---
 def get_exclusion_mask(image_data, target_w, target_h):
