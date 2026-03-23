@@ -261,6 +261,9 @@ if st.session_state.file_names:
             pad_orig = max(1, round(CANVAS_PAD * w / display_w))
             padded_traced = ImageOps.expand(traced_pil, border=pad_orig, fill=(160, 160, 160))
 
+            # デバッグ用：キャンバスに渡す画像そのものを表示してみる
+            st.image(padded_traced, caption="Debug: This image should be on the canvas")
+
             canvas_result = st_canvas(
                 fill_color="rgba(255, 255, 255, 0.5)",
                 stroke_width=2,
