@@ -263,7 +263,7 @@ if st.session_state.file_names:
             padded_traced = ImageOps.expand(traced_pil, border=pad_orig, fill=(160, 160, 160))
 
             # デバッグ用：キャンバスに渡す画像そのものを表示してみる
-            st.image(padded_traced, caption="Debug: This image should be on the canvas")
+            # st.image(padded_traced, caption="Debug: This image should be on the canvas")
 
             # 1. パッチを消した状態で、単純に PIL 画像を渡す
             canvas_result = st_canvas(
