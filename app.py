@@ -330,6 +330,11 @@ if st.session_state.file_names:
                     res["class_vis_imgs"] = {}
                 res["class_annotations"][prompt_type] = yolo_txt
                 res["class_vis_imgs"][prompt_type] = vis_img
+                if "class_masks" not in res:
+                    res["class_masks"] = {}
+                res["class_masks"][prompt_type] = logic.generate_binary_mask(
+                    traced_bytes_to_use, int(sat_thresh), saved_target_rgb
+                )
                 res["completed"] = True
                 saved_names = ", ".join(CLASS_MAP[c]["suffix"].lstrip("_") for c in res["class_annotations"])
                 st.success(f"Saved [{prompt_type}] for {filename}  |  All saved: {saved_names}")
@@ -345,20 +350,23 @@ if st.session_state.results_dict:
                 if data.get("completed"):
                     stem = Path(fname).stem
                     ext = Path(fname).suffix
-                    # 全クラスのアノテーションを結合してラベルファイルに保存
-                    all_annotations = "\n".join(
-                        txt for txt in data.get("class_annotations", {}).values() if txt.strip()
-                    )
-                    # 元画像を images/ に保存（YOLO dataset 形式）
-                    zf.writestr(f"images/{fname}", st.session_state.file_bytes_dict[fname])
-                    # ラベルを labels/ に保存
-                    zf.writestr(f"labels/{stem}.txt", all_annotations)
-                    # クラスごとの可視化画像を visualized/ にサフィックス付きで保存
+                    for pt in data.get("class_annotations", {}):
+                        suffix = CLASS_MAP.get(pt, CLASS_MAP["Cracks"])["suffix"]
+                        # train/images/ にサフィックス付きで元画像を保存
+                        zf.writestr(f"train/images/{stem}{suffix}{ext}", st.session_state.file_bytes_dict[fname])
+                        # train/masks/ に二値マスク画像を保存
+                        mask_bytes = data.get("class_masks", {}).get(pt)
+                        if mask_bytes:
+                            zf.writestr(f"train/masks/{stem}{suffix}.png", mask_bytes)
+                        # labels/ にクラス別ラベルを保存
+                        txt = data["class_annotations"][pt]
+                        if txt.strip():
+                            zf.writestr(f"labels/{stem}{suffix}.txt", txt)
+                    # visualized/ にクラス別可視化画像を保存
                     for pt, vis_img in data.get("class_vis_imgs", {}).items():
                         suffix = CLASS_MAP.get(pt, CLASS_MAP["Cracks"])["suffix"]
-                        vis_fname = f"{stem}{suffix}{ext}"
                         _, img_enc = cv2.imencode(".jpg", vis_img)
-                        zf.writestr(f"visualized/{vis_fname}", img_enc.tobytes())
+                        zf.writestr(f"visualized/{stem}{suffix}{ext}", img_enc.tobytes())
             # data.yaml を追加
             yaml_content = (
                 "nc: 3\n"
@@ -366,8 +374,8 @@ if st.session_state.results_dict:
                 "  - cracks\n"
                 "  - chipped_delaminated\n"
                 "  - efflorescence\n"
-                "train: images/\n"
-                "val: images/\n"
+                "train: train/images/\n"
+                "val: train/images/\n"
             )
             zf.writestr("data.yaml", yaml_content)
         st.download_button("🔥 ZIP Download", zip_buffer.getvalue(), "dataset.zip", "application/zip", use_container_width=True)

@@ -79,6 +79,17 @@ def reprocess_from_raw(image_bytes, raw_bytes, gap_fill_kernel=0, saturation_thr
     return _composite_red_on_original(image_bytes, raw_bytes, gap_fill_kernel, saturation_threshold, target_rgb)
 
 
+def generate_binary_mask(traced_bytes, saturation_threshold=150, target_rgb=(255, 0, 0)):
+    """traced画像から二値マスク画像（白=劣化領域, 黒=背景）をPNG bytesで返す"""
+    nparr = np.frombuffer(traced_bytes, np.uint8)
+    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    mask = _extract_color_mask(img, target_rgb, saturation_threshold)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+    _, enc = cv2.imencode(".png", mask)
+    return enc.tobytes()
+
+
 def process_yolo_segmentation(traced_bytes, original_width, original_height, min_area_px=10, exclusion_rects=None, class_id=0, saturation_threshold=150, target_rgb=(255, 0, 0)):
     """指定色の描画画像からYOLO用テキストと可視化画像を生成する (除外領域処理付き)"""
 
